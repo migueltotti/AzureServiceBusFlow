@@ -51,11 +51,10 @@ namespace AzureServiceBusFlow.Abstractions
             CancellationToken cancellationToken);
 
         /// <summary>
-        /// Sends a message to the Azure Service Bus to a specific session
-        /// that will group all messages with the same sessionId at the consumer.
+        /// Sends a message to the Azure Service Bus bounded to a specific session.
         /// </summary>
         /// <param name="message">The message to be sent.</param>
-        /// <param name="sessionId">sessionId that represents the session that this message will be grouped at the consumer.</param>
+        /// <param name="sessionId">sessionId that represents the session that this message will be bounded.</param>
         /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
         Task ProduceAsync(
             TMessage message,
