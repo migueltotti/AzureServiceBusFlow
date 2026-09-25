@@ -9,5 +9,7 @@ namespace AzureServiceBusFlow.Models
         public int MaxConcurrentCalls { get; set; }
         public int MaxAutoLockRenewalDurationInSeconds { get; set; }
         public int MaxRetryAttempts { get; set; }
+        public int MaxConcurrentCallsPerSession { get; set; }
+        public int MaxConcurrentSessions { get; set; }
     }
 }

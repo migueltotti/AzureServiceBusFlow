@@ -20,6 +20,7 @@ public class ServiceBusConsumerConfigurationBuilder(AzureServiceBusConfiguration
     private string? _queueName;
     private string? _topicName;
     private string? _subscriptionName;
+    private bool _withSessions = false;
     private readonly List<Type> _middlewares = [];
     private readonly string _consumerMiddlewareKey = Guid.NewGuid().ToString();
 
@@ -47,12 +48,23 @@ public class ServiceBusConsumerConfigurationBuilder(AzureServiceBusConfiguration
         return this;
     }
 
+    public ServiceBusConsumerConfigurationBuilder WithSessions()
+    {
+        _withSessions = true;
+        return this;
+    }
+
     public ServiceBusConsumerConfigurationBuilder EnsureSubscriptionExists(string topicName, string subscriptionName)
     {
         var managementClient = new ManagementClient(_connectionString);
         if (!managementClient.SubscriptionExistsAsync(topicName, subscriptionName).GetAwaiter().GetResult())
         {
-            managementClient.CreateSubscriptionAsync(topicName, subscriptionName).GetAwaiter().GetResult();
+            var subscriptionDescription = new SubscriptionDescription(topicName, subscriptionName)
+            {
+                RequiresSession = _withSessions
+            };
+
+            managementClient.CreateSubscriptionAsync(subscriptionDescription).GetAwaiter().GetResult();
         }
 
         managementClient.CloseAsync().GetAwaiter().GetResult();
@@ -111,7 +123,8 @@ public class ServiceBusConsumerConfigurationBuilder(AzureServiceBusConfiguration
                     sp,
                     logger,
                     _azureServiceBusConfiguration,
-                    _queueName!);
+                    _queueName!,
+                    withSessions: _withSessions);
             }
 
             return new ServiceBusConsumerHostedService(
@@ -121,7 +134,8 @@ public class ServiceBusConsumerConfigurationBuilder(AzureServiceBusConfiguration
                 logger,
                 _azureServiceBusConfiguration,
                 _topicName!,
-                _subscriptionName!);
+                _subscriptionName!,
+                _withSessions);
         });
     }
 
@@ -193,8 +207,10 @@ public class ServiceBusConsumerConfigurationBuilder(AzureServiceBusConfiguration
         if (messageType == null)
         {
             logger.LogWarning(
-                "Received message of type {MessageType}, but no handler is registered to process this message. Time: {Time}",
-                messageTypeName, DateTime.UtcNow);
+                "Received message of type {MessageType} with SessionId {SessionId}, but no handler is registered to process this message. Time: {Time}",
+                messageTypeName,
+                rawMessage.SessionId,
+                DateTime.UtcNow);
             return;
         }
 
@@ -233,9 +249,10 @@ public class ServiceBusConsumerConfigurationBuilder(AzureServiceBusConfiguration
             var elapsed = DateTime.UtcNow - startTime;
 
             logger.LogInformation(
-                "Message {MessageType} with CorrelationId {CorrelationId} consumed and handled by {HandlerName} at {StartTime} in {ElapsedMilliseconds} ms",
+                "Message {MessageType} with CorrelationId {CorrelationId} with SessionId {SessioId} consumed and handled by {HandlerName} at {StartTime} in {ElapsedMilliseconds} ms",
                 messageTypeName,
                 rawMessage.CorrelationId,
+                rawMessage.SessionId,
                 handlerType.Name,
                 startTime.ToString("o"),
                 elapsed.TotalMilliseconds);

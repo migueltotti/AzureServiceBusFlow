@@ -13,10 +13,12 @@ public class ServiceBusConsumerHostedService(
     ILogger logger,
     AzureServiceBusConfiguration azureServiceBusConfiguration,
     string queueOrTopicName,
-    string subscriptionName = null!) : IHostedService, IAsyncDisposable
+    string subscriptionName = null!,
+    bool withSessions = false) : IHostedService, IAsyncDisposable
 {
     private readonly ServiceBusClient _client = new(azureServiceBusConfiguration.ConnectionString);
     private ServiceBusProcessor _processor = null!;
+    private ServiceBusSessionProcessor _sessionProcessor = null!;
     private readonly AsyncRetryPolicy _retryPolicy = Policy
         .Handle<Exception>()
         .WaitAndRetryAsync(
@@ -29,6 +31,28 @@ public class ServiceBusConsumerHostedService(
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
+        if (withSessions)
+        {
+            var sessionOptions = new ServiceBusSessionProcessorOptions
+            {
+                MaxConcurrentCallsPerSession = azureServiceBusConfiguration.MaxConcurrentCallsPerSession,
+                MaxConcurrentSessions = azureServiceBusConfiguration.MaxConcurrentSessions,
+                MaxAutoLockRenewalDuration = TimeSpan.FromSeconds(azureServiceBusConfiguration.MaxAutoLockRenewalDurationInSeconds),
+                AutoCompleteMessages = false,
+                ReceiveMode = azureServiceBusConfiguration.ServiceBusReceiveMode,
+                Identifier = queueOrTopicName
+            };
+
+            _sessionProcessor = subscriptionName is null
+                ? _client.CreateSessionProcessor(queueOrTopicName, sessionOptions)
+                : _client.CreateSessionProcessor(queueOrTopicName, subscriptionName, sessionOptions);
+
+            _sessionProcessor.ProcessMessageAsync += ProcessSessionMessageHandler;
+            _sessionProcessor.ProcessErrorAsync += ProcessErrorHandler;
+
+            return _sessionProcessor.StartProcessingAsync(cancellationToken);
+        }
+
         var options = new ServiceBusProcessorOptions
         {
             MaxConcurrentCalls = azureServiceBusConfiguration.MaxConcurrentCalls,
@@ -88,6 +112,48 @@ public class ServiceBusConsumerHostedService(
         }
     }
 
+    private async Task ProcessSessionMessageHandler(ProcessSessionMessageEventArgs args)
+    {
+        var message = args.Message;
+
+        try
+        {
+            if (_sessionProcessor.ReceiveMode == ServiceBusReceiveMode.ReceiveAndDelete)
+            {
+                await _retryPolicy.ExecuteAsync(async _ =>
+                {
+                    await messageHandler(message, serviceProvider, args.CancellationToken);
+                }, CancellationToken.None);
+            }
+
+            if (_sessionProcessor.ReceiveMode == ServiceBusReceiveMode.PeekLock)
+            {
+                await messageHandler(message, serviceProvider, args.CancellationToken);
+                await args.CompleteMessageAsync(message, args.CancellationToken);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error while trying process MessageType {MessageType} with CorrelationId {CorrelationId} with id {MessageId} with session {SessionId} - MessageBody {Body}",
+                message.GetType().Name,
+                message.CorrelationId,
+                message.MessageId,
+                message.SessionId,
+                message.Body);
+
+            if (_sessionProcessor.ReceiveMode == ServiceBusReceiveMode.PeekLock)
+            {
+                await args.AbandonMessageAsync(message, cancellationToken: args.CancellationToken);
+
+                logger.LogWarning("Message {MessageType} with CorrelationId {CorrelationId} with id {MessageId} with session {SessionId} abandoned. Will retry again.",
+                    message.GetType().Name,
+                    message.CorrelationId,
+                    message.MessageId,
+                    message.SessionId);
+            }
+        }
+    }
+
     private Task ProcessErrorHandler(ProcessErrorEventArgs args)
     {
         logger.LogError(args.Exception, "Erro no processor: {ErrorSource}", args.ErrorSource);
@@ -102,6 +168,12 @@ public class ServiceBusConsumerHostedService(
             await _processor.DisposeAsync();
         }
 
+        if (_sessionProcessor != null)
+        {
+            await _sessionProcessor.StopProcessingAsync(cancellationToken);
+            await _sessionProcessor.DisposeAsync();
+        }
+
         await _client.DisposeAsync();
     }
 
@@ -110,6 +182,11 @@ public class ServiceBusConsumerHostedService(
         if (_processor != null)
         {
             await _processor.DisposeAsync();
+        }
+
+        if (_sessionProcessor != null)
+        {
+            await _sessionProcessor.DisposeAsync();
         }
 
         await _client.DisposeAsync();
