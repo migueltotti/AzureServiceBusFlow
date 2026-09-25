@@ -1,4 +1,4 @@
 ﻿namespace AzureServiceBusFlow.Models
 {
-    public record MessageOptions(TimeSpan? Delay, IDictionary<string, object>? ApplicationProperties);
+    public record MessageOptions(TimeSpan? Delay, IDictionary<string, object>? ApplicationProperties, string? SessionId);
 }

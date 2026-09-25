@@ -49,5 +49,17 @@ namespace AzureServiceBusFlow.Abstractions
             TMessage message,
             IDictionary<string, object> applicationProperties,
             CancellationToken cancellationToken);
+
+        /// <summary>
+        /// Sends a message to the Azure Service Bus to a specific session
+        /// that will group all messages with the same sessionId at the consumer.
+        /// </summary>
+        /// <param name="message">The message to be sent.</param>
+        /// <param name="sessionId">sessionId that represents the session that this message will be grouped at the consumer.</param>
+        /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+        Task ProduceAsync(
+            TMessage message,
+            string sessionId,
+            CancellationToken cancellationToken);
     }
 }

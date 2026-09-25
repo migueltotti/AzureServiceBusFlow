@@ -36,13 +36,18 @@ namespace AzureServiceBusFlow.Builders
             return this;
         }
 
-        public ServiceBusProducerConfigurationBuilder<TMessage> EnsureQueueExists(string queueName)
+        public ServiceBusProducerConfigurationBuilder<TMessage> EnsureQueueExists(string queueName, bool withSessions = false)
         {
             var managementClient = new ManagementClient(_azureServiceBusConfiguration.ConnectionString);
 
             if (!managementClient.QueueExistsAsync(queueName).GetAwaiter().GetResult())
             {
-                managementClient.CreateQueueAsync(queueName).GetAwaiter().GetResult();
+                var queueDescription = new QueueDescription(queueName)
+                {
+                    RequiresSession = withSessions
+                };
+
+                managementClient.CreateQueueAsync(queueDescription).GetAwaiter().GetResult();
             }
 
             managementClient.CloseAsync().GetAwaiter().GetResult();

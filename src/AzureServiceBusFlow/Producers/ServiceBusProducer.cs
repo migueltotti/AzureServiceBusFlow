@@ -96,13 +96,19 @@ namespace AzureServiceBusFlow.Producers
                 serviceBusMessage.ScheduledEnqueueTime = DateTimeOffset.UtcNow.Add(producerOptions.Delay.Value);
             }
 
+            if (producerOptions?.SessionId is not null)
+            {
+                serviceBusMessage.SessionId = producerOptions.SessionId;
+            }
+
             async Task finalStep()
             {
                 await _sender.SendMessageAsync(serviceBusMessage, cancellationToken);
 
-                _logger.LogInformation("Message {MessageType} with CorrelationId {CorrelationId} published successfully!",
+                _logger.LogInformation("Message {MessageType} with CorrelationId {CorrelationId} with SessionId {SessionId} published successfully!",
                     message.GetType().Name,
-                    serviceBusMessage.CorrelationId);
+                    serviceBusMessage.CorrelationId,
+                    serviceBusMessage.SessionId);
             }
 
             if (_middlewares != null && _middlewares.Any())
@@ -124,12 +130,17 @@ namespace AzureServiceBusFlow.Producers
 
         public Task ProduceAsync(TMessage message, TimeSpan delay, CancellationToken cancellationToken)
         {
-            return ProduceAsync(message, new MessageOptions(delay, null), cancellationToken);
+            return ProduceAsync(message, new MessageOptions(delay, null, null), cancellationToken);
         }
 
         public Task ProduceAsync(TMessage message, IDictionary<string, object> applicationProperties, CancellationToken cancellationToken)
         {
-            return ProduceAsync(message, new MessageOptions(null, applicationProperties), cancellationToken);
+            return ProduceAsync(message, new MessageOptions(null, applicationProperties, null), cancellationToken);
+        }
+
+        public Task ProduceAsync(TMessage message, string sessionId, CancellationToken cancellationToken)
+        {
+            return ProduceAsync(message, new MessageOptions(null, null, sessionId), cancellationToken);
         }
     }
 }
