@@ -23,4 +23,9 @@ public interface ICommandProducer<in TCommand> where TCommand : class, IServiceB
     /// Produces the command with a delivery delay before it becomes available for processing.
     /// </summary>
     Task ProduceCommandAsync(TCommand command, TimeSpan delay, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Produces the command with a delivery delay before it becomes available for processing.
+    /// </summary>
+    Task ProduceCommandAsync(TCommand command, string sessionId, CancellationToken cancellationToken);
 }

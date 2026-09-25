@@ -1,5 +1,6 @@
 ﻿using AzureServiceBusFlow.Abstractions;
 using AzureServiceBusFlow.Models;
+using Microsoft.Azure.Amqp.Framing;
 
 namespace AzureServiceBusFlow.Producers
 {
@@ -38,6 +39,14 @@ namespace AzureServiceBusFlow.Producers
         public Task ProduceCommandAsync(TCommand command, IDictionary<string, object> applicationProperties, CancellationToken cancellationToken)
         {
             return _producer.ProduceAsync(command, applicationProperties, cancellationToken);
+        }
+
+        /// <summary>
+        /// Produces a command with sessionId.
+        /// </summary>
+        public Task ProduceCommandAsync(TCommand command, string sessionId, CancellationToken cancellationToken)
+        {
+            return _producer.ProduceAsync(command, sessionId, cancellationToken);
         }
     }
 }
