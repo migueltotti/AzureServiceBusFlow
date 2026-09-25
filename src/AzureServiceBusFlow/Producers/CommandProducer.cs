@@ -1,6 +1,5 @@
 ﻿using AzureServiceBusFlow.Abstractions;
 using AzureServiceBusFlow.Models;
-using Microsoft.Azure.Amqp.Framing;
 
 namespace AzureServiceBusFlow.Producers
 {
